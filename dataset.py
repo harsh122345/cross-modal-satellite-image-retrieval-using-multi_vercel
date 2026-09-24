@@ -360,11 +360,20 @@ def extract_sar_features(img):
     ])
     return features
 
-def extract_text_features(description, vocabulary):
+DEFAULT_VOCABULARY = [
+    "urban", "building", "street", "concrete", "city",
+    "forest", "tree", "vegetation", "wood", "river",
+    "water", "lake", "canal", "agricultural", "field",
+    "crop", "farmland", "desert", "sand", "dune"
+]
+
+def extract_text_features(description="", vocabulary=None):
     """
     Extracts keyword count vector for descriptions, normalized to unit length.
     """
-    desc_lower = description.lower()
+    if vocabulary is None:
+        vocabulary = DEFAULT_VOCABULARY
+    desc_lower = str(description or "").lower()
     features = np.zeros(len(vocabulary), dtype=np.float32)
     for idx, word in enumerate(vocabulary):
         count = desc_lower.count(word)

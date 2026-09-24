@@ -1,0 +1,17 @@
+.git
+.gitignore
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+*.md
+Dockerfile
+docker-compose.yml
+test_*.py
+scratch/
+.venv/
+env/
+venv/

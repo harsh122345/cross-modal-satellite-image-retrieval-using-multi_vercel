@@ -25,11 +25,11 @@ RUN pip install --upgrade pip && \
 # Copy the rest of the application code
 COPY . .
 
-# Expose port 8501 for Streamlit
-EXPOSE 8501
+# Expose port 8000 for FastAPI
+EXPOSE 8000
 
 # Healthcheck to verify container is running
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+HEALTHCHECK CMD curl --fail http://localhost:8000/api/health || exit 1
 
-# Run the streamlit application
-ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run the FastAPI application using Uvicorn
+ENTRYPOINT ["uvicorn", "api.index:app", "--host", "0.0.0.0", "--port", "8000"]

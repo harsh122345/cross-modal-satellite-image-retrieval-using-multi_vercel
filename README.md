@@ -1,98 +1,88 @@
-# Cross-Modal Satellite Image Retrieval Using Multi-Sensor Remote Sensing Data
+# 🛰️ Cross-Modal Satellite Image Retrieval Using Multi-Sensor Remote Sensing Data
 
-This repository contains a prototype application for cross-modal remote sensing satellite image retrieval. The system aligns three completely distinct sensor and description modalities:
-1. **Optical Bands (Passive Reflected Solar Energy)**: RGB color imagery showing visual boundaries, crop colors, and building patterns.
-2. **Synthetic Aperture Radar (SAR) (Active Emitted Microwave Backscatter)**: Specular reflection off calm water (very dark returns), double-bounce reflections off vertical concrete structures (extremely bright corners), and volume scattering off forest foliage. Includes Gamma speckle noise simulation.
-3. **Natural Language Text Descriptions**: Free-form textual descriptions characterizing the landscape features and presence of elements (e.g. roads, rivers).
+High-performance **FastAPI backend** and **Interactive Web Dashboard** for Cross-Modal Remote Sensing Satellite Image Retrieval, optimized for **Vercel Serverless Deployment** and local execution.
 
-To ensure 100% reliability, zero-setup speed, and zero binary size problems on CPU, the core projection networks, feature extractors, and backpropagation optimization loops are written in **pure NumPy and scikit-learn**, with an interactive web UI built in **Streamlit**.
+The system aligns three distinct sensor and description modalities:
+1. **Optical Bands (Passive Reflected Solar Energy)**: RGB color imagery capturing visual boundaries, crop signatures, and building structures.
+2. **Synthetic Aperture Radar (SAR) (Active Microwave Backscatter)**: Specular reflections off calm water, double-bounce reflections off vertical structures, and volume scattering from vegetation (with Gamma speckle noise modeling).
+3. **Natural Language Text Descriptions**: Multi-lingual captions characterizing landscape cover, water bodies, and road networks.
 
 ---
 
-## Technical Architecture
+## 🚀 Key Features
 
-```mermaid
-graph TD
-    classDef opt fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff;
-    classDef sar fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff;
-    classDef txt fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fff;
-    classDef aligned fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#fff;
+* **⚡ FastAPI Backend**: Asynchronous REST API exposing modular endpoints for dataset inspection, cross-modal retrieval, model fine-tuning, Grad-CAM attention maps, and FAISS indexing.
+* **🌐 Modern Web Dashboard**: Single-page application with glassmorphism dark theme, interactive **Leaflet GIS maps**, **Plotly 3D PCA** latent projections, and real-time retrieval matching.
+* **🌍 8-Language Localization**: Full UI support for English, Español, Français, 日本語 (Japanese), Русский (Russian), Deutsch (German), 中文 (Chinese), and हिन्दी (Hindi).
+* **🧠 Advanced Deep Learning Models**:
+  * **CLIP Visual & Text Transformer** (`openai/clip-vit-base-patch32`) with robust lightweight CNN fallbacks.
+  * **DINOv2 Self-Supervised Vision Transformer** (`facebook/dinov2-small`).
+  * **Multi-Modal Transformer Aligner** (cross-attention over Optical, SAR, and Text).
+  * **Spatial Graph Convolutional Network (GCN)** for neighborhood context refinement.
+* **🔍 Real-Time FAISS Retrieval**: Sub-millisecond vector indexing with cosine / L2 distance and dynamic latency benchmarking.
+* **👁️ Grad-CAM Explainability**: Interactive saliency activation maps highlighting discriminative features.
+* **☁️ Vercel & Docker Ready**: Complete `vercel.json` configuration for one-click serverless deployment, plus multi-stage `Dockerfile`.
 
-    subgraph Modalities
-        O[Optical RGB Image]:::opt --> FeatO[Optical Feature Extractor 17d]:::opt
-        S[SAR Grayscale Image]:::sar --> FeatS[SAR Feature Extractor 6d]:::sar
-        T[Natural Text Query]:::txt --> FeatT[Text Feature Extractor 20d]:::txt
-    end
+---
 
-    subgraph Shared Projection Space
-        FeatO --> MLP_O[Optical MLP Branch]:::opt
-        FeatS --> MLP_S[SAR MLP Branch]:::sar
-        FeatT --> MLP_T[Text MLP Branch]:::txt
+## 🛠️ Local Quickstart
 
-        MLP_O --> Zo[Normalized Embedding Zo]:::aligned
-        MLP_S --> Zs[Normalized Embedding Zs]:::aligned
-        MLP_T --> Zt[Normalized Embedding Zt]:::aligned
-    end
-
-    Zo <--> |Symmetric InfoNCE Loss| Zs
-    Zo <--> |Symmetric InfoNCE Loss| Zt
-    Zs <--> |Symmetric InfoNCE Loss| Zt
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
 ```
 
-### Contrastive Learning & Backpropagation Equations
+### 2. Run with FastAPI & Modern Web UI (Recommended)
+```bash
+python main.py
+```
+Open **[http://localhost:8000](http://localhost:8000)** in your browser.
+Open **[http://localhost:8000/docs](http://localhost:8000/docs)** for interactive OpenAPI / Swagger API documentation.
 
-Each branch projects normalized feature vectors to the shared embedding space:
-$$h = \max(0, X W_1 + b_1)$$
-$$u = h W_2 + b_2$$
-$$z = \frac{u}{\|u\|_2}$$
-
-For a batch of size $B$ and temperature $\tau$, the symmetric InfoNCE loss between modality $A$ and modality $B$ is:
-$$S_{AB} = z_A z_B^T \in \mathbb{R}^{B \times B}$$
-$$P_{row}[i, j] = \frac{\exp(S_{AB}[i, j]/\tau)}{\sum_k \exp(S_{AB}[i, k]/\tau)}, \quad P_{col}[i, j] = \frac{\exp(S_{AB}[i, j]/\tau)}{\sum_k \exp(S_{AB}[k, j]/\tau)}$$
-$$L_{AB} = -\frac{1}{2B} \sum_{i=1}^B \left( \log P_{row}[i, i] + \log P_{col}[i, i] \right)$$
-
-The total loss minimized is:
-$$L_{total} = L_{OS} + L_{OT} + L_{ST}$$
-
-The analytical gradient of the pairwise loss with respect to the similarity matrix $S_{AB}$ is:
-$$\frac{\partial L_{AB}}{\partial S_{AB}} = \frac{1}{2B\tau} (P_{row} + P_{col} - 2I)$$
-
-Backpropagating the gradient to the unnormalized branch output $u$ (accounting for the L2 normalization quotient rule):
-$$\frac{\partial L}{\partial u} = \frac{1}{\|u\|_2} \left( \frac{\partial L}{\partial z} - \left( z \odot \frac{\partial L}{\partial z} \right) z \right)$$
-
-Weights are optimized interactively using the **Adam Optimizer**. Gradient checks are implemented in `test_alignment.py` using finite differences, passing with a relative error of $1.12 \times 10^{-7}$.
+### 3. Run with Streamlit (Legacy Option)
+```bash
+streamlit run app.py
+```
 
 ---
 
-## How to Install and Run
+## ⚡ Deploying to Vercel
 
-1. **Install requirements**:
-   Make sure you have Python 3.10+ installed. Install the dependencies using pip:
-   ```bash
-   pip install -r requirements.txt
-   ```
+The project includes a ready-to-use `vercel.json` configuration for Vercel's Python Serverless Runtime:
 
-2. **Verify mathematical correctness (Optional)**:
-   Run the gradient checker and training loop test suite:
-   ```bash
-   python test_alignment.py
-   ```
+### Option A: Using Vercel CLI
+```bash
+npm install -g vercel
+vercel
+vercel --prod
+```
 
-3. **Launch the interactive Streamlit UI**:
-   Start the local web application:
-   ```bash
-   streamlit run app.py
-   ```
-   The application will automatically open in your default browser at `http://localhost:8501`.
+### Option B: Deploying via GitHub Git Integration
+1. Push this repository to GitHub.
+2. Import the repository into your [Vercel Dashboard](https://vercel.com).
+3. Vercel will automatically detect `vercel.json` and deploy both the FastAPI serverless functions under `/api` and the static web UI under `/`.
 
 ---
 
-## Application Features
+## 📡 REST API Reference
 
-- **Dataset Explorer**: Visually inspect matching Optical/SAR patches and text descriptors representing cities, woodlands, rivers, crop fields, and deserts.
-- **Interactive Model Training**: Train the custom neural aligner in real-time. View live training loss curves and check metrics like mAP (Mean Average Precision) and Recall@1/5.
-- **Shared Latent Space Projection**: View 2D PCA plots of the joint embedding coordinates. Watch as the different sensors group together by semantic category once alignment is trained.
-- **Cross-Modal Retrieval Search Engine**:
-  - Search satellite images using natural language text prompts (e.g. searching for "water canal in city").
-  - Search SAR radar patches corresponding to optical visual images.
-  - Search optical visual patches corresponding to SAR radar readings.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Check backend health status and loaded model backbones |
+| `GET` | `/api/dataset` | Retrieve generated scenes, coordinates, and base64 previews |
+| `POST` | `/api/dataset/regenerate` | Regenerate synthetic dataset with custom seed/size |
+| `GET` | `/api/dataset/{scene_id}` | Inspect a single scene patch with Optical & SAR imagery |
+| `POST` | `/api/retrieve` | Execute cross-modal retrieval (Optical $\leftrightarrow$ SAR $\leftrightarrow$ Text) with FAISS & GNN |
+| `POST` | `/api/train` | Train the MultiModalTransformer and GCNRefiner on active dataset |
+| `POST` | `/api/explain` | Generate Grad-CAM attention heatmap for a target scene |
+| `GET` | `/api/embeddings/pca` | Get 3D PCA coordinates for interactive scatter plots |
+| `POST` | `/api/benchmark` | Compare FAISS index latency against brute-force NumPy |
+
+---
+
+## 🐋 Run with Docker
+
+```bash
+docker build -t satellite-retrieval:latest .
+docker run -p 8000:8000 satellite-retrieval:latest
+```

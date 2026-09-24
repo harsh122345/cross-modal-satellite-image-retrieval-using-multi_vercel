@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛰️ Multi-Sensor Satellite Image Retrieval</title>
+    <meta name="description" content="Cross-Modal Retrieval between Optical, Radar (SAR), and Text using Transformers, GNNs, FAISS, and Grad-CAM explainability.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet GIS Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Main Style -->
+    <link rel="stylesheet" href="/static/style.css">
+    
+    <!-- Plotly.js & Leaflet.js -->
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+    <!-- Background Canvas for Space Particles & Orbit Grid -->
+    <canvas id="space-bg-canvas"></canvas>
+
+    <!-- Futuristic Mission Control Opening Boot Sequence Overlay -->
+    <div id="boot-overlay" class="boot-overlay">
+        <div class="boot-scanner-ring">
+            <div class="radar-sweep-beam"></div>
+            <div class="radar-crosshair"></div>
+            <div class="satellite-orbit-icon">🛰️</div>
+            <div class="orbit-circle orbit-1"></div>
+            <div class="orbit-circle orbit-2"></div>
+            <div class="orbit-circle orbit-3"></div>
+        </div>
+
+        <div class="boot-terminal-box">
+            <div class="boot-header">
+                <span class="status-indicator"></span>
+                <span class="boot-system-title">ORBITAL MISSION CONTROL // SYS_BOOT_v2.0</span>
+            </div>
+            
+            <div class="boot-log-terminal" id="boot-terminal-logs">
+                <div class="log-line">> [SYS_INIT] Synchronizing Multi-Modal Neural Weight Tensor...</div>
+            </div>
+
+            <div class="boot-progress-wrapper">
+                <div class="boot-progress-bar" id="boot-progress-bar"></div>
+            </div>
+            <div class="boot-progress-status">
+                <span id="boot-progress-text">CALIBRATING MULTI-SENSOR MATRICES...</span>
+                <span id="boot-progress-percent">0%</span>
+            </div>
+
+            <div class="boot-audio-prompt" id="btn-soundtrack-trigger">
+                <div class="audio-equalizer">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                <span>🔊 MISSION SOUNDTRACK ACTIVE</span>
+            </div>
+
+            <button id="btn-skip-boot" class="btn-skip-boot">ENTER MISSION CONTROL ➔</button>
+        </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <div class="logo-wrapper">
+                <span class="logo-icon">🛰️</span>
+                <div class="logo-radar-pulse"></div>
+            </div>
+            <div class="brand-text">
+                <span class="brand-title" data-i18n="title">Multi-Sensor Satellite Retrieval</span>
+                <span class="brand-badge">FastAPI & Vercel</span>
+            </div>
+        </div>
+        
+        <div class="nav-controls">
+            <!-- Audio FX Toggle -->
+            <button id="btn-audio-toggle" class="telemetry-btn" title="Toggle UI Sound Effects">
+                <span id="audio-icon">🔊</span> <span id="audio-label">FX: ON</span>
+            </button>
+
+            <!-- API Status -->
+            <div class="status-badge" id="api-status">
+                <span class="pulse-dot"></span>
+                <span id="status-text">Connecting to Constellation...</span>
+            </div>
+            
+            <!-- Language Selector -->
+            <div class="language-selector">
+                <span class="lang-icon">🌐</span>
+                <select id="lang-select" aria-label="Language Selector">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="ja">日本語</option>
+                    <option value="ru">Русский</option>
+                    <option value="de">Deutsch</option>
+                    <option value="zh">中文</option>
+                    <option value="hi">हिन्दी</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- Telemetry Status Bar -->
+    <div class="telemetry-bar">
+        <div class="telemetry-item">
+            <span class="telemetry-label">CONSTELLATION:</span>
+            <span class="telemetry-val text-emerald">SENTINEL-1 (SAR) + SENTINEL-2 (RGB)</span>
+        </div>
+        <div class="telemetry-item">
+            <span class="telemetry-label">ORBITAL TRACK:</span>
+            <span class="telemetry-val" id="telemetry-coords">35.68° N, 139.65° E • ALT 705 KM</span>
+        </div>
+        <div class="telemetry-item">
+            <span class="telemetry-label">JOINT EMBEDDING:</span>
+            <span class="telemetry-val text-blue">64-DIM ISOMORPHIC</span>
+        </div>
+        <div class="telemetry-item">
+            <span class="telemetry-label">SEARCH ENGINE:</span>
+            <span class="telemetry-val text-purple">FAISS COSINE / GNN V2</span>
+        </div>
+        <div class="telemetry-item">
+            <span class="telemetry-label">GSD RESOLUTION:</span>
+            <span class="telemetry-val">0.5 M / PX</span>
+        </div>
+    </div>
+
+    <!-- Main Container Layout -->
+    <main class="main-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="sidebar-card cyber-panel">
+                <div class="panel-corner-tl"></div>
+                <div class="panel-corner-br"></div>
+                <h3 data-i18n="dataset_config">1. Dataset Configuration</h3>
+                <div class="form-group">
+                    <div class="slider-label-row">
+                        <span data-i18n="num_scenes">Number of Scenes</span>
+                        <strong id="num-scenes-val" class="highlight-val">150</strong>
+                    </div>
+                    <input type="range" id="num-scenes-input" min="50" max="300" step="25" value="150">
+                </div>
+                <div class="form-group">
+                    <label for="gen-seed-input"><span data-i18n="gen_seed">Generator Seed</span></label>
+                    <input type="number" id="gen-seed-input" value="42" min="0" max="9999">
+                </div>
+                <button id="btn-regen-dataset" class="btn btn-secondary w-full" data-i18n="regen_btn">📦 Regenerate Dataset</button>
+            </div>
+
+            <div class="sidebar-card cyber-panel">
+                <div class="panel-corner-tl"></div>
+                <div class="panel-corner-br"></div>
+                <h3 data-i18n="model_select">2. Model Training & GNN</h3>
+                <div class="form-group">
+                    <div class="slider-label-row">
+                        <span data-i18n="epochs">Training Epochs</span>
+                        <strong id="epochs-val" class="highlight-val">5</strong>
+                    </div>
+                    <input type="range" id="epochs-input" min="1" max="25" value="5">
+                </div>
+                <div class="form-group">
+                    <div class="slider-label-row">
+                        <span data-i18n="lr">Learning Rate</span>
+                        <strong id="lr-val" class="highlight-val">0.005</strong>
+                    </div>
+                    <input type="number" id="lr-input" value="0.005" step="0.001" min="0.0001" max="0.1">
+                </div>
+                <button id="btn-train-model" class="btn btn-primary w-full" data-i18n="train_btn">🔥 Train Active Model</button>
+                <div class="model-stats">
+                    <span data-i18n="epochs_trained">Trained Epochs</span>: <strong id="stat-trained-epochs" class="counter-badge">0</strong>
+                </div>
+            </div>
+
+            <div class="sidebar-card info-box cyber-panel">
+                <div class="panel-corner-tl"></div>
+                <div class="panel-corner-br"></div>
+                <h4>🛰️ Multi-Modal Sensors</h4>
+                <div class="sensor-pill-list">
+                    <span class="pill pill-optical">Optical (RGB)</span>
+                    <span class="pill pill-sar">Radar (SAR)</span>
+                    <span class="pill pill-text">Text Captions</span>
+                </div>
+                <div class="mini-telemetry-hud">
+                    <div class="radar-scan-mini">
+                        <div class="radar-sweep"></div>
+                    </div>
+                    <div class="telemetry-live-text">
+                        <span class="live-dot"></span> SATELLITE TELEMETRY SYNCED
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <section class="content-area">
+            <!-- Hero Banner -->
+            <div class="hero-banner">
+                <div class="banner-glow-bg"></div>
+                <div class="banner-grid-overlay"></div>
+                <h1 data-i18n="title">🛰️ Multi-Sensor Satellite Image Retrieval</h1>
+                <p data-i18n="subtitle">Cross-Modal Retrieval between Optical, Radar (SAR), and Text using Transformers & GNNs</p>
+            </div>
+
+            <!-- Tab Navigation Headers -->
+            <nav class="tabs-nav">
+                <button class="tab-btn active" data-tab="tab-gis"><span class="tab-icon">🌍</span> <span data-i18n="tab_gis">GIS Explorer</span></button>
+                <button class="tab-btn" data-tab="tab-models"><span class="tab-icon">🧠</span> <span data-i18n="tab_models">Models & 3D PCA</span></button>
+                <button class="tab-btn" data-tab="tab-retrieve"><span class="tab-icon">🔍</span> <span data-i18n="tab_retrieve">Real-time Retrieval (FAISS)</span></button>
+                <button class="tab-btn" data-tab="tab-explain"><span class="tab-icon">👁️</span> <span data-i18n="tab_explain">Explainability (Grad-CAM)</span></button>
+                <button class="tab-btn" data-tab="tab-cloud"><span class="tab-icon">🚢</span> <span data-i18n="tab_cloud">Docker & Vercel API</span></button>
+            </nav>
+
+            <!-- TAB 1: GIS Explorer -->
+            <div id="tab-gis" class="tab-pane active">
+                <div class="tab-header-row">
+                    <p class="tab-desc" data-i18n="desc_gis">Explore geolocated satellite scenes plotted over real-world biome coordinates.</p>
+                    
+                    <!-- Quick Biome Filter Chips -->
+                    <div class="biome-filter-bar">
+                        <span class="filter-label">Filter Biome:</span>
+                        <button class="biome-chip active" data-filter="all">🌍 All</button>
+                        <button class="biome-chip chip-urban" data-filter="urban">🏙️ Urban</button>
+                        <button class="biome-chip chip-forest" data-filter="forest">🌲 Forest</button>
+                        <button class="biome-chip chip-water" data-filter="water">🌊 Water</button>
+                        <button class="biome-chip chip-farmland" data-filter="farmland">🌾 Farmland</button>
+                        <button class="biome-chip chip-desert" data-filter="desert">🏜️ Desert</button>
+                    </div>
+                </div>
+                
+                <div class="gis-layout">
+                    <div class="gis-map-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <div class="card-header">
+                            <h3>🗺️ Global Biome Interactive Map</h3>
+                            <span class="badge-hint">Click any marker to inspect</span>
+                        </div>
+                        <div id="leaflet-map" class="map-container"></div>
+                    </div>
+
+                    <div class="gis-inspector-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <div class="card-header">
+                            <h3>🔍 Scene Patch Inspector</h3>
+                            <div class="mode-toggles">
+                                <button id="btn-view-mode-dual" class="mode-btn active" title="Side-by-Side Dual View">Side-by-Side</button>
+                                <button id="btn-view-mode-swipe" class="mode-btn" title="Interactive Split Swipe">Swipe Split</button>
+                            </div>
+                        </div>
+                        
+                        <div class="slider-control">
+                            <div class="slider-label-row">
+                                <label for="scene-slider">Select Scene ID:</label>
+                                <strong id="selected-scene-id" class="highlight-val">0</strong>
+                            </div>
+                            <input type="range" id="scene-slider" min="0" max="59" value="0">
+                        </div>
+
+                        <div class="inspector-meta" id="scene-meta">
+                            <div class="meta-row"><strong>Land Cover:</strong> <span id="meta-class" class="badge-class">Loading...</span></div>
+                            <div class="meta-row"><strong>Coordinates:</strong> <span id="meta-coords">0.0, 0.0</span></div>
+                            <div class="meta-row"><strong>Features:</strong> <span id="meta-features">Road: No, River: No</span></div>
+                        </div>
+
+                        <div class="inspector-desc">
+                            <strong>Description:</strong>
+                            <p id="meta-desc">"Loading scene caption..."</p>
+                        </div>
+
+                        <!-- Standard Dual View -->
+                        <div class="sensor-preview-grid" id="dual-preview-container">
+                            <div class="preview-box">
+                                <span class="preview-title">Optical (RGB)</span>
+                                <div class="img-frame">
+                                    <img id="img-optical-preview" src="" alt="Optical Preview">
+                                </div>
+                            </div>
+                            <div class="preview-box">
+                                <span class="preview-title">Radar (SAR)</span>
+                                <div class="img-frame">
+                                    <img id="img-sar-preview" src="" alt="SAR Preview">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Swipe Comparison Slider (Hidden by default) -->
+                        <div class="swipe-compare-wrapper hidden" id="swipe-compare-container">
+                            <div class="swipe-container" id="swipe-compare-box">
+                                <img id="swipe-img-sar" class="swipe-img" src="" alt="SAR Image">
+                                <div class="swipe-overlay" id="swipe-overlay">
+                                    <img id="swipe-img-opt" class="swipe-img" src="" alt="Optical Image">
+                                </div>
+                                <div class="swipe-handle" id="swipe-handle">
+                                    <div class="swipe-handle-line"></div>
+                                    <div class="swipe-handle-knob">↔</div>
+                                </div>
+                            </div>
+                            <div class="swipe-labels">
+                                <span>◄ Optical (RGB)</span>
+                                <span>Radar (SAR) ►</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Models & 3D PCA -->
+            <div id="tab-models" class="tab-pane">
+                <p class="tab-desc" data-i18n="desc_models">Train models and inspect alignment in 3D joint embedding space.</p>
+                
+                <div class="models-layout">
+                    <div class="models-info-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <h3>Model Architecture Stack</h3>
+                        <div class="arch-cards">
+                            <div class="arch-card">
+                                <h4>1. CLIP-based Encoders</h4>
+                                <p>Extracts deep semantic representations aligned between vision and captions.</p>
+                            </div>
+                            <div class="arch-card">
+                                <h4>2. DINOv2 Self-Supervised Features</h4>
+                                <p>Computes robust spatial & texture representations from optical patches.</p>
+                            </div>
+                            <div class="arch-card">
+                                <h4>3. Multi-Modal Transformer</h4>
+                                <p>Projects multi-sensor vectors (Optical, SAR, Text) into joint 64-dim latent space.</p>
+                            </div>
+                            <div class="arch-card">
+                                <h4>4. Graph Neural Network (GNN)</h4>
+                                <p>Propagates node embeddings across adjacent geographic coordinates.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pca-plot-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <div class="card-header">
+                            <h3>🧠 3D Latent PCA Embeddings</h3>
+                            <button id="btn-refresh-pca" class="btn btn-sm btn-secondary">🔄 Refresh 3D Space</button>
+                        </div>
+                        <div id="plotly-3d-scatter" class="plotly-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Real-Time Retrieval (FAISS) -->
+            <div id="tab-retrieve" class="tab-pane">
+                <p class="tab-desc" data-i18n="desc_retrieve">Perform fast cross-sensor queries using optimized FAISS indexing.</p>
+
+                <div class="retrieval-query-panel cyber-panel">
+                    <div class="panel-corner-tl"></div>
+                    <div class="panel-corner-br"></div>
+                    <div class="query-controls">
+                        <div class="form-group">
+                            <label><span data-i18n="query_mod">Query Modality</span></label>
+                            <select id="query-modality-select">
+                                <option value="optical">Optical (RGB Image)</option>
+                                <option value="sar">Radar (SAR Image)</option>
+                                <option value="text">Text Query</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label><span data-i18n="db_mod">Database Modality</span></label>
+                            <select id="target-modality-select">
+                                <option value="optical">Optical (RGB Database)</option>
+                                <option value="sar">Radar (SAR Database)</option>
+                                <option value="text">Text Description Database</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="query-scene-box">
+                            <div class="slider-label-row">
+                                <label>Query Scene ID:</label>
+                                <strong id="query-scene-id-val" class="highlight-val">0</strong>
+                            </div>
+                            <input type="range" id="query-scene-slider" min="0" max="59" value="0">
+                        </div>
+
+                        <div class="form-group hidden" id="query-text-box">
+                            <label>Text Description Query</label>
+                            <input type="text" id="query-text-input" placeholder="e.g. dense green forest with winding river">
+                        </div>
+
+                        <div class="form-check">
+                            <input type="checkbox" id="check-use-gnn">
+                            <label for="check-use-gnn" data-i18n="gnn_refine">Enable GNN Neighborhood Refinement</label>
+                        </div>
+
+                        <button id="btn-execute-search" class="btn btn-primary" data-i18n="search_btn">⚡ Search Modality Database</button>
+                    </div>
+
+                    <div class="query-preview-panel">
+                        <h4>Query Input Preview</h4>
+                        <div id="query-preview-container" class="query-preview-box">
+                            <img id="query-preview-img" src="" alt="Query Preview">
+                            <p id="query-preview-text">Selected Scene #0</p>
+                        </div>
+                        <div class="latency-meter">
+                            <span data-i18n="latency_cmp">Latency</span>: <strong id="retrieval-latency" class="text-emerald">0.0 ms</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Grid -->
+                <h3 class="results-header">🏆 Top-K Retrieval Matches (FAISS Ranked)</h3>
+                <div id="retrieval-results-grid" class="results-grid">
+                    <!-- Populated dynamically via app.js -->
+                </div>
+            </div>
+
+            <!-- TAB 4: Explainability (Grad-CAM) -->
+            <div id="tab-explain" class="tab-pane">
+                <p class="tab-desc" data-i18n="desc_explain">Inspect neural attention maps highlighting discriminative features.</p>
+                
+                <div class="explain-controls cyber-panel">
+                    <div class="panel-corner-tl"></div>
+                    <div class="panel-corner-br"></div>
+                    <div class="form-group">
+                        <div class="slider-label-row">
+                            <label>Target Scene ID:</label>
+                            <strong id="explain-scene-id-val" class="highlight-val">0</strong>
+                        </div>
+                        <input type="range" id="explain-scene-slider" min="0" max="59" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Vision Backbone</label>
+                        <select id="explain-encoder-select">
+                            <option value="clip">CLIP Visual Transformer (openai/clip-vit-base-patch32)</option>
+                            <option value="dinov2">DINOv2 Self-Supervised (facebook/dinov2-small)</option>
+                        </select>
+                    </div>
+                    <button id="btn-generate-cam" class="btn btn-primary">👁️ Compute Grad-CAM Map</button>
+                </div>
+
+                <div class="cam-display-grid">
+                    <div class="cam-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <h4>1. Original Optical Scene</h4>
+                        <div class="img-frame">
+                            <img id="cam-img-orig" src="" alt="Original Scene">
+                        </div>
+                    </div>
+                    <div class="cam-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <h4>2. Saliency Heatmap (Attention)</h4>
+                        <div class="img-frame">
+                            <img id="cam-img-heatmap" src="" alt="Grad-CAM Saliency">
+                        </div>
+                    </div>
+                    <div class="cam-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <h4>3. Heatmap Overlay</h4>
+                        <div class="img-frame">
+                            <img id="cam-img-blended" src="" alt="Blended Activation">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: Docker & Cloud / Vercel API -->
+            <div id="tab-cloud" class="tab-pane">
+                <p class="tab-desc" data-i18n="desc_cloud">Production containerization and deployment instructions.</p>
+                
+                <div class="cloud-grid">
+                    <div class="cloud-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <h3>⚡ Vercel Deployment</h3>
+                        <p>This project is configured with <code>vercel.json</code> to deploy the FastAPI backend & static UI as serverless microservices.</p>
+                        <div class="code-block">
+                            <code>vercel --prod</code>
+                        </div>
+                        <a href="/docs" target="_blank" class="btn btn-secondary mt-3">📖 Open Interactive Swagger API Docs (/docs)</a>
+                    </div>
+
+                    <div class="cloud-card cyber-panel">
+                        <div class="panel-corner-tl"></div>
+                        <div class="panel-corner-br"></div>
+                        <h3>🐋 Docker Containerization</h3>
+                        <p>Run locally or in production containers with multi-stage builds:</p>
+                        <div class="code-block">
+                            <code>docker build -t satellite-retrieval:latest .<br>docker run -p 8000:8000 satellite-retrieval:latest</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Main Logic Script -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

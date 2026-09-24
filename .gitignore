@@ -11,3 +11,4 @@ ENV/
 .vscode/
 .idea/
 .streamlit/config.toml
+.vercel

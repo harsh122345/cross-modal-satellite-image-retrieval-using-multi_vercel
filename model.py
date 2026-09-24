@@ -103,7 +103,14 @@ class CrossModalEmbeddingAligner:
     - Text Count Features (20d)
     to a shared, aligned embedding space of dimension embed_dim.
     """
-    def __init__(self, dim_opt=17, dim_sar=6, dim_txt=20, hidden_dim=32, embed_dim=16, temperature=0.1, seed=42):
+    def __init__(self, dim_opt=17, dim_sar=6, dim_txt=20, hidden_dim=32, embed_dim=16, temperature=0.1, seed=42, opt_dim=None, sar_dim=None, txt_dim=None):
+        if opt_dim is not None:
+            dim_opt = opt_dim
+        if sar_dim is not None:
+            dim_sar = sar_dim
+        if txt_dim is not None:
+            dim_txt = txt_dim
+
         self.embed_dim = embed_dim
         self.temperature = temperature
         
@@ -134,6 +141,8 @@ class CrossModalEmbeddingAligner:
         """
         Applies standard scaler scaling.
         """
+        if self.mean_opt is None:
+            self.fit_normalizers(X_opt, X_sar, X_txt)
         X_opt_norm = (X_opt - self.mean_opt) / self.std_opt
         X_sar_norm = (X_sar - self.mean_sar) / self.std_sar
         X_txt_norm = (X_txt - self.mean_txt) / self.std_txt
@@ -143,7 +152,9 @@ class CrossModalEmbeddingAligner:
         """
         Performs forward pass for all three modalities and returns normalized embeddings.
         """
-        if normalized and self.mean_opt is not None:
+        if normalized:
+            if self.mean_opt is None:
+                self.fit_normalizers(X_opt, X_sar, X_txt)
             X_opt, X_sar, X_txt = self.normalize_features(X_opt, X_sar, X_txt)
             
         u_opt = self.branch_opt.forward(X_opt)
@@ -170,6 +181,34 @@ class CrossModalEmbeddingAligner:
         self.branch_txt.z = z_txt
         
         return z_opt, z_sar, z_txt
+
+    def project_all(self, X_opt, X_sar, X_txt):
+        """
+        Convenience projection method returning (z_opt, z_sar, z_txt).
+        """
+        return self.forward(X_opt, X_sar, X_txt, normalized=True)
+
+    def project_single(self, modality: str, feature_vec: np.ndarray) -> np.ndarray:
+        """
+        Projects a single 1D or 2D feature vector into the shared latent space.
+        """
+        vec = np.atleast_2d(feature_vec)
+        if modality == 'optical':
+            if self.mean_opt is not None:
+                vec = (vec - self.mean_opt) / self.std_opt
+            u = self.branch_opt.forward(vec)
+        elif modality == 'sar':
+            if self.mean_sar is not None:
+                vec = (vec - self.mean_sar) / self.std_sar
+            u = self.branch_sar.forward(vec)
+        else: # text
+            if self.mean_txt is not None:
+                vec = (vec - self.mean_txt) / self.std_txt
+            u = self.branch_txt.forward(vec)
+        norm = np.linalg.norm(u, axis=1, keepdims=True)
+        norm[norm == 0] = 1e-8
+        z = u / norm
+        return z[0] if feature_vec.ndim == 1 else z
 
     def compute_contrastive_loss_and_grads(self, z_a, z_b, u_a, u_b):
         """
