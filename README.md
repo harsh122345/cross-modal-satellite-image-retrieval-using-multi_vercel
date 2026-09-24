@@ -64,6 +64,8 @@ vercel --prod
 
 ---
 
+### Option C:You Can view the project
+The Deloyed Project Link in Vercel as **[Deployed Project](https://cross-modal-satellite-image-retriev.vercel.app/)**
 ## 📡 REST API Reference
 
 | Method | Endpoint | Description |
